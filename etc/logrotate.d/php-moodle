@@ -1,0 +1,16 @@
+# Log PHP in /var/log/php (error log FPM/CLI e slowlog del pool)
+/var/log/php/*.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        if [ -x /usr/lib/php/php8.3-fpm-reopenlogs ]; then
+            /usr/lib/php/php8.3-fpm-reopenlogs;
+        fi
+    endscript
+}
