@@ -1,4 +1,9 @@
 # Log PHP in /var/log/php (error log FPM/CLI e slowlog del pool)
+# La directory DEVE essere di root e non scrivibile da www-data:
+#   install -d -o root -g adm -m 0755 /var/log/php
+# logrotate gira come root: in una directory scrivibile da un utente non privilegiato
+# rifiuta di ruotare ("insecure permissions") ed e' esposto ad attacchi via symlink.
+# I file di log sono di www-data (vedi "create"), la directory no.
 /var/log/php/*.log {
     daily
     rotate 14

@@ -158,6 +158,9 @@ in `/etc/apache2/envvars`), sufficiente, e un override systemd non avrebbe effet
 Verificati in produzione: `vm.zone_reclaim_mode = 0` e `kernel.numa_balancing = 1` (corretti con 2 nodi NUMA, nessuna modifica).
 
 **[etc/logrotate.d/php-moodle](etc/logrotate.d/php-moodle)** (nuovo): rotazione giornaliera, 14 giorni, dei log in `/var/log/php/`.
+La directory `/var/log/php` deve essere di **root** (`0755`), con i soli file di log di `www-data`:
+logrotate gira come root e in una directory scrivibile da `www-data` rifiuterebbe di ruotare
+("insecure permissions") o sarebbe esposto ad attacchi via symlink.
 
 ### Rimossi
 
@@ -186,7 +189,11 @@ sudo install -m 644 etc/php/8.3/cli/php.ini                  /etc/php/8.3/cli/
 sudo install -m 644 etc/php/8.3/mods-available/moodle-opcache.ini /etc/php/8.3/mods-available/
 sudo phpdismod -s fpm xdebug
 sudo phpenmod  -s fpm moodle-opcache        # crea fpm/conf.d/99-moodle-opcache.ini
-sudo install -d -o www-data -g adm /var/log/php
+# directory dei log di root (NON scrivibile da www-data: logrotate gira come root),
+# file di log pre-creati di www-data perche' i worker FPM e il cron possano scriverci
+sudo install -d -o root -g adm -m 0755 /var/log/php
+sudo install -o www-data -g adm -m 0640 /dev/null /var/log/php/php8.3-fpm.error.log
+sudo install -o www-data -g adm -m 0640 /dev/null /var/log/php/php8.3-cli.error.log
 sudo install -m 644 etc/logrotate.d/php-moodle /etc/logrotate.d/
 
 # limite file aperti (in alternativa: systemctl edit php8.3-fpm, scrivendo SOPRA la riga
