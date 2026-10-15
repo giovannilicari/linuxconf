@@ -74,7 +74,9 @@ Il nome con la "s" non viene collegato da `a2enmod`: Apache usava i default Ubun
 - **XSendFile** (`XSendFilePath /var/moodledata`): i download (pluginfile, video, SCORM, backup) li
   serve Apache; senza, ogni download occupa un worker PHP per tutto il trasferimento.
   Richiede `$CFG->xsendfile = 'X-Sendfile';` in `config.php`.
-- **Stato FPM** `/fpm-status` e `/fpm-ping` esposti **solo da localhost** (`Require local`).
+- **Monitoraggio**: `/server-status` (Apache, mod_status) e `/fpm-status`, `/fpm-ping` (PHP-FPM)
+  accessibili **solo da localhost e dagli IP in `MONITORING_IPS`** (`Define` in testa al file),
+  e esclusi dall'access log. Vedi la sezione "Monitoraggio remoto".
 - Regole file sensibili ancorate (`^config\.php$`, ...) per non bloccare file legittimi;
   blocco `vendor|node_modules|tests|fixtures` esteso alle sottocartelle.
 - Rimosso `X-XSS-Protection` (deprecato, ignorato dai browser).
@@ -237,6 +239,42 @@ sysctl vm.overcommit_memory net.ipv4.ip_local_port_range net.ipv4.tcp_slow_start
 # worker FPM (atteso 257 = 256 + master) e stato del pool
 ps -C php-fpm8.3 --no-headers | wc -l
 curl -sk "https://localhost/fpm-status"
+```
+
+## Monitoraggio remoto
+
+In testa a [000-moodle.conf](etc/apache2/sites-available/000-moodle.conf) impostare l'IP (o la rete)
+del server di monitoraggio; piu' valori separati da spazio:
+
+```apache
+Define MONITORING_IPS "10.0.5.20 10.0.6.0/24"
+```
+
+Finche' resta il valore di esempio (`192.0.2.10`, rete di documentazione) accede solo localhost.
+Le pagine sono solo in HTTPS (il vhost :80 reindirizza tutto).
+
+| URL | Contenuto | Formato per tool |
+|---|---|---|
+| `/server-status?auto` | Apache: richieste/s, byte/s, thread occupati/liberi, stato connessioni (keep-alive, chiusura) | testo chiave: valore |
+| `/server-status` | come sopra + elenco richieste in corso (client, URL, tempi) | HTML |
+| `/fpm-status?json` | FPM: processi attivi/idle, coda di attesa, `max children reached`, `max active processes`, `slow requests` | JSON (anche `?openmetrics` per Prometheus) |
+| `/fpm-status?full&json` | come sopra + dettaglio di ogni worker (script, durata, memoria) | JSON |
+| `/fpm-ping` | risponde `pong` se FPM e' vivo | testo |
+
+Metriche da tenere d'occhio:
+- **Apache** `BusyWorkers` vicino a 1024 -> Apache saturo; `ConnsAsyncKeepAlive` alto e' normale.
+- **FPM** `listen queue` > 0 in modo stabile o `max children reached` che cresce -> pool saturo.
+- **FPM** `slow requests` in crescita -> controllare `/var/log/php/php8.3-fpm.slow.log`.
+
+`/server-status` mostra IP dei client e URL delle richieste in corso: non deve mai essere
+raggiungibile da Internet. `mod_status` e' attivo di default su Ubuntu (`a2enmod status`);
+il suo `status.conf` di default resta invariato (`ExtendedStatus On`, `ProxyStatus On`).
+
+Prova dal server di monitoraggio:
+
+```bash
+curl -s  "https://moodledev.esempio.dev/server-status?auto" | head
+curl -s  "https://moodledev.esempio.dev/fpm-status?json"
 ```
 
 ## Verifica dimensionamento (da fare al picco: quiz, inizio lezioni)
